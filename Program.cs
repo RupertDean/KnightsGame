@@ -22,7 +22,7 @@ public class Item : Entity
     private int _defenceModifier;
     private int[] _position;
 
-    public char Name
+    public new char Name
     {
         get => _name;
     }
@@ -37,7 +37,7 @@ public class Item : Entity
         get => _defenceModifier;
     }
 
-    public int[] Positon
+    public new int[] Position
     {
         get => _position;
 
@@ -62,8 +62,9 @@ public class Knight : Entity
     private int _defence = 1;
     private Item _item = (Item)null;
     private int[] _position;
+    private bool _dead = false;
 
-    public char Name
+    public new char Name
     {
         get => _name;
     }
@@ -88,11 +89,16 @@ public class Knight : Entity
         }
     }
 
-    public int[] Position
+    public new int[] Position
     {
         get => _position;
 
         set => _position = value;
+    }
+
+    public new bool Dead
+    {
+        get => _dead;
     }
 
     public Knight() { }
@@ -103,10 +109,39 @@ public class Knight : Entity
         _position = pos;
     }
 
+    internal void Drop()
+    {
+        _item = (Item)null;
+    }
+
+    internal void Drown()
+    {
+        _position = new int[] { -1, -1 };
+        _attack = 0;
+        _defence = 0;
+        _dead = true;
+    }
+
+    internal void Die()
+    {
+        Drop();
+        _attack = 0;
+        _defence = 0;
+        _dead = true;
+    }
 }
 
 public class Entity
 {
+    private int[] _position = { -1, -1};
+    internal readonly bool Dead;
+
+    public int[] Position
+    {
+        get => _position;
+    }
+    public Array Name { get; internal set; }
+
     public Entity()
     {
 
@@ -122,11 +157,6 @@ class Program
     The final position of a DROWNED knight is null.
 
     **/
-    static void Drown()
-    {
-
-    }
-
     static bool checkMoveForWater(int[] Coord)
     {
         if ((Coord[0] < 0) || (Coord[0] > 7) || (Coord[1] < 0) || Coord[1] > 7) return true;
@@ -158,19 +188,35 @@ class Program
     A DEAD or DROWNED knight has attack 0 and defence 0.
 
         **/
-    static void Fight()
+    static void Fight(Knight Attacker, Knight Defender)
     {
-        if (true) LoseFight();
+        float attackerScore = ((float)(Attacker.Attack + 0.5 + ((Attacker.Item == (Item)null) ? 0 : Attacker.Item.AttackModifier)));
+        float defenderScore = ((float) Defender.Defence + ((Defender.Item ==(Item)null) ? 0 : Defender.Item.DefenceModifier));
+
+        if(attackerScore - defenderScore > 0)
+        {
+            Defender.Die();
+            return;
+        }
+
+        Attacker.Die();
+        return;
     }
 
-    static void checkMoveForFight(int[] Coord)
+    static int checkMoveForFight(int[] Coord, List<Entity> Board)
     {
-        Fight();
-    }
+        for (int i = 0; i < Board.Count; i++)
+        {
+            if ((Board[i].Position == Coord) && (Board[i].GetType() == typeof(Knight)))
+            {
+                if (!Board[i].Dead)
+                {
+                return i;
+                }
+            }
+        }
 
-    static void LoseFight()
-    {
-        Drop();
+        return -1;
     }
 
     /**
@@ -198,20 +244,28 @@ class Program
     Knights that die in battle drop their item (if they have one).
     Knights that drown throw their item to the bank before sinking down to Davy Jones' Locker - the item is left on the last valid tile that the knight was on.
 
-    **/
-    static void Drop()
+    **/     
+    static int checkMoveForItem(int[] Coord, List<Entity> Board)
     {
+        char[] itemPriority = { 'A', 'M', 'D', 'H' };
+        int item = -1;
 
-    }
-        
-    static void PickUp()
-    {
+        for (int i = 0; i < Board.Count; i++)
+        {
+            if (Board[i].Position == Coord && (Board[i].GetType() == typeof(Item)))
+            {
+                if(item == -1)
+                {
+                    item = i;
+                }
+                else if(Array.IndexOf(itemPriority, Board[i].Name) < Array.IndexOf(itemPriority, Board[item].Name))
+                {
+                    item = i;
+                }
+            }
+        }
 
-    }
-
-    static void checkMoveForItem(int[] Coord)
-    {
-        PickUp();
+        return item;
     }
 
     /**
@@ -227,40 +281,23 @@ class Program
     If a knight moves off the board then they are swept away and drown immediately.
 
         **/
-    static int[] FindKnight(char Knight, List<List<Entity>> Board)
+    static void Move(Knight knight, char Direction, List<Entity> Board)
     {
-        for(int y = 0; y < 8; y++)
-        {
-            for (int x = 0; x < 8; x++)
-            {
-                
-            }
-        }
-        return new int[] { -1, -1};
-    }
+        int[] next = knight.Position;
+        if (knight.Dead) return;
 
-    static void Move(char Knight, char Direction, List<List<Entity>> Board)
-    {
-        int[] current = FindKnight(Knight, Board);
-        if (current[0] == -1) return;
-
-        int[] next;
         switch (Direction)
         {
             case 'N':
-                next = current;
-                next[0]++;
+                next[0]--;
                 break;
             case 'E':
-                next = current;
                 next[1]++;
                 break;
             case 'S':
-                next = current;
-                next[0]--;
+                next[0]++;
                 break;
             case 'W':
-                next = current;
                 next[0]--;
                 break;
 
@@ -269,8 +306,28 @@ class Program
         }
 
         bool water = checkMoveForWater(next);
-        checkMoveForItem(next);
-        checkMoveForFight(next);
+        if (water)
+        {
+            knight.Drop();
+            knight.Drown();
+            return;
+        }
+
+        int item = checkMoveForItem(next, Board);
+        if (item > -1)
+        {
+            knight.Item = (Item)Board[item];
+        }
+        
+        int fight = checkMoveForFight(next, Board);
+        if (fight > -1)
+        {
+            knight.Position = next;
+            Fight(knight, (Knight)Board[fight]);
+        }
+
+        knight.Position = next;
+        return;
     }
 
     /**
@@ -291,21 +348,31 @@ class Program
     ```
 
         **/
-    static List<List<Entity>> PopulateBoard(List<Knight> Knights, List<Item> Items)
+    static List<Entity> PopulateBoard(List<Knight> Knights, List<Item> Items)
     {
-        List<List<Entity>> board = new List<List<Entity>>();
+        List<Entity> board = new List<Entity>();
+
+        for(int i = 0; i < Knights.Count; i++)
+        {
+            board.Add(Knights[i]);
+        }
+
+        for(int i = 0; i < Items.Count; i++)
+        {
+            board.Add(Items[i]);
+        }
 
         return board;
     }
 
-    static void WriteOut(List<List<Entity>> Board)
+    static void WriteOut(List<Entity> Board)
     {
 
     }
 
     static void Main(string[] args)
     {
-        List<List<Entity>> board = new List<List<Entity>>();
+        List<Entity> board = new List<Entity>();
         List<Knight> Knights = new List<Knight>();
         List<Item> Items = new List<Item>();
 
@@ -334,14 +401,22 @@ class Program
                     board = PopulateBoard(Knights, Items);
                     System.Console.WriteLine("Game Started");
                     break;
+
                 case "GAME-END":
                     WriteOut(board);
                     System.Console.WriteLine("Game Finished");
                     break;
-                case string _ when Regex.IsMatch(line, @"[RBGY]:[NESW]"):
-                    Move(line[0], line[2], board);
 
+                case string _ when Regex.IsMatch(line, @"[RBGY]:[NESW]"):
+                    foreach (Knight k in Knights)
+                    {
+                        if (k.Name == line[0])
+                        {
+                            Move(k, line[2], board);
+                        }
+                    }
                     break;
+
                 default:
                     throw new UnrecognisedMovement(line);
             }
