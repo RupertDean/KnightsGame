@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 public class UnrecognisedMovement : Exception
 {
@@ -17,9 +18,9 @@ public class UnrecognisedMovement : Exception
 
 public class Item : Entity
 {
-    private char _name;
-    private int _attackModifier;
-    private int _defenceModifier;
+    private readonly char _name;
+    private readonly int _attackModifier;
+    private readonly int _defenceModifier;
     private int[] _position;
 
     public new char Name
@@ -57,12 +58,12 @@ public class Item : Entity
 
 public class Knight : Entity
 {
-    private char _name;
+    private readonly char _name;
     private int _attack = 1;
     private int _defence = 1;
     private Item _item = (Item)null;
     private int[] _position;
-    private bool _dead = false;
+    private string _status = "LIVE";
 
     public new char Name
     {
@@ -96,9 +97,9 @@ public class Knight : Entity
         set => _position = value;
     }
 
-    public new bool Dead
+    public new string Status
     {
-        get => _dead;
+        get => _status;
     }
 
     public Knight() { }
@@ -119,7 +120,7 @@ public class Knight : Entity
         _position = new int[] { -1, -1 };
         _attack = 0;
         _defence = 0;
-        _dead = true;
+        _status = "DROWNED";
     }
 
     internal void Die()
@@ -127,26 +128,26 @@ public class Knight : Entity
         Drop();
         _attack = 0;
         _defence = 0;
-        _dead = true;
+        _status = "DEAD";
     }
 }
 
 public class Entity
 {
-    private int[] _position = { -1, -1};
-    internal readonly bool Dead;
+    private readonly int[] _position = { -1, -1 };
 
     public int[] Position
     {
         get => _position;
     }
-    public Array Name { get; internal set; }
-
-    public Entity()
-    {
-
+    public Array Name 
+    { 
+        get; 
+        internal set; 
     }
+    public string Status { get; internal set; }
 }
+
 
 class Program
 {
@@ -157,7 +158,7 @@ class Program
     The final position of a DROWNED knight is null.
 
     **/
-    static bool checkMoveForWater(int[] Coord)
+    static bool CheckMoveForWater(int[] Coord)
     {
         if ((Coord[0] < 0) || (Coord[0] > 7) || (Coord[1] < 0) || Coord[1] > 7) return true;
         return false;
@@ -203,13 +204,13 @@ class Program
         return;
     }
 
-    static int checkMoveForFight(int[] Coord, List<Entity> Board)
+    static int CheckMoveForFight(int[] Coord, List<Entity> Board)
     {
         for (int i = 0; i < Board.Count; i++)
         {
             if ((Board[i].Position == Coord) && (Board[i].GetType() == typeof(Knight)))
             {
-                if (!Board[i].Dead)
+                if (Board[i].Status != "LIVE")
                 {
                 return i;
                 }
@@ -245,7 +246,7 @@ class Program
     Knights that drown throw their item to the bank before sinking down to Davy Jones' Locker - the item is left on the last valid tile that the knight was on.
 
     **/     
-    static int checkMoveForItem(int[] Coord, List<Entity> Board)
+    static int CheckMoveForItem(int[] Coord, List<Entity> Board)
     {
         char[] itemPriority = { 'A', 'M', 'D', 'H' };
         int item = -1;
@@ -284,7 +285,7 @@ class Program
     static void Move(Knight knight, char Direction, List<Entity> Board)
     {
         int[] next = knight.Position;
-        if (knight.Dead) return;
+        if (knight.Status != "LIVE") return;
 
         switch (Direction)
         {
@@ -305,7 +306,7 @@ class Program
                 return;                      
         }
 
-        bool water = checkMoveForWater(next);
+        bool water = CheckMoveForWater(next);
         if (water)
         {
             knight.Drop();
@@ -313,13 +314,13 @@ class Program
             return;
         }
 
-        int item = checkMoveForItem(next, Board);
+        int item = CheckMoveForItem(next, Board);
         if (item > -1)
         {
             knight.Item = (Item)Board[item];
         }
         
-        int fight = checkMoveForFight(next, Board);
+        int fight = CheckMoveForFight(next, Board);
         if (fight > -1)
         {
             knight.Position = next;
@@ -367,7 +368,7 @@ class Program
 
     static void WriteOut(List<Entity> Board)
     {
-
+        
     }
 
     static void Main(string[] args)
