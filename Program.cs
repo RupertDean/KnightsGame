@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Text.Json;
@@ -16,12 +17,28 @@ public class UnrecognisedMovement : Exception
     }
 }
 
+public class Output
+{
+#pragma warning disable IDE1006 // Naming Styles - to fit given formatting
+    public Knight red { get; set; }
+    public Knight blue { get; set; }
+    public Knight green { get; set; }
+    public Knight yellow { get; set; }
+    public Item magic_staff { get; set; }
+    public Item helmet { get; set; }
+    public Item dagger { get; set; }
+    public Item axe { get; set; }
+#pragma warning restore IDE1006 // Naming Styles
+
+}
+
 public class Item : Entity
 {
     private readonly char _name;
     private readonly int _attackModifier;
     private readonly int _defenceModifier;
     private int[] _position;
+    private bool _equipped = false;
 
     public new char Name
     {
@@ -45,6 +62,13 @@ public class Item : Entity
         set => _position = value;
     }
 
+    public bool Equipped
+    {
+        get => _equipped;
+
+        set => _equipped = value;
+    }
+
     public Item() { }
 
     public Item(char name, int attMod, int defMod, int[] pos)
@@ -59,35 +83,16 @@ public class Item : Entity
 public class Knight : Entity
 {
     private readonly char _name;
-    private int _attack = 1;
-    private int _defence = 1;
-    private Item _item = (Item)null;
     private int[] _position;
     private string _status = "LIVE";
+    private Item _item = (Item)null;
+    private int _attack = 1;
+    private int _defence = 1;
 
     public new char Name
     {
         get => _name;
-    }
 
-    public int Attack
-    {
-        get => _attack;
-    }
-
-    public int Defence
-    {
-        get => _defence;
-    }
-
-    public Item Item
-    {
-        get => _item;
-
-        set
-        {
-            if (_item == (Item)null) _item = value as Item;
-        }
     }
 
     public new int[] Position
@@ -100,6 +105,33 @@ public class Knight : Entity
     public new string Status
     {
         get => _status;
+
+        set => _status = value;
+
+    }
+
+    public Item Item
+    {
+        get => _item;
+
+        set
+        {
+            if (_item == (Item)null) _item = value as Item;
+        }
+    }
+
+    public int Attack
+    {
+        get => _attack;
+
+        set => _attack = value;
+    }
+
+    public int Defence
+    {
+        get => _defence;
+
+        set => _defence = value;
     }
 
     public Knight() { }
@@ -117,7 +149,7 @@ public class Knight : Entity
 
     internal void Drown()
     {
-        _position = new int[] { -1, -1 };
+        _position = new int[] { };
         _attack = 0;
         _defence = 0;
         _status = "DROWNED";
@@ -147,7 +179,6 @@ public class Entity
     }
     public string Status { get; internal set; }
 }
-
 
 class Program
 {
@@ -318,6 +349,8 @@ class Program
         if (item > -1)
         {
             knight.Item = (Item)Board[item];
+            knight.Item.Equipped = true;
+
         }
         
         int fight = CheckMoveForFight(next, Board);
@@ -328,6 +361,7 @@ class Program
         }
 
         knight.Position = next;
+        if(knight.Item != (Item)null) knight.Item.Position = next;
         return;
     }
 
@@ -368,7 +402,22 @@ class Program
 
     static void WriteOut(List<Entity> Board)
     {
-        
+        var output = new Output
+        {
+            red = (Knight)Board[0],
+            blue = (Knight)Board[1],
+            green = (Knight)Board[2],
+            yellow = (Knight)Board[3],
+
+            magic_staff = (Item)Board[4],
+            helmet = (Item)Board[5],
+            dagger = (Item)Board[6],
+            axe = (Item)Board[7],
+        };
+
+        var options = new JsonSerializerOptions { WriteIndented = true, IgnoreReadOnlyProperties = true, };
+        string jsonString = JsonSerializer.Serialize(output, options);
+        File.WriteAllText("final_state.json", jsonString);
     }
 
     static void Main(string[] args)
@@ -425,6 +474,6 @@ class Program
 
         Console.WriteLine("Press any key to close");
         movesFile.Close();
-        Console.ReadKey();
+        //Console.ReadKey();
     }
 }
