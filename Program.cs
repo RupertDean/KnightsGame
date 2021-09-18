@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+// Custom exception to be thrown when a move is not in the expected format
 public class UnrecognisedMovement : Exception
 {
     public UnrecognisedMovement()
@@ -16,6 +17,7 @@ public class UnrecognisedMovement : Exception
     { }
 }
 
+// JSON output class
 public class Output
 {
 #pragma warning disable IDE1006 // Naming Styles - to fit given formatting
@@ -31,14 +33,20 @@ public class Output
 
 }
 
+// Item is a child of Entity, so it can be stored in the same list as the Knights
+// items are weapons and armour etc
 public class Item : Entity
 {
+    // These values do not change after the constructor exits so are readonly
     private readonly char _name = '\0';
     private readonly int _attackModifier;
     private readonly int _defenceModifier;
+
     private int[] _position;
     private bool _equipped = false;
 
+    // Accessors
+    // JsonIgnore tags to prevent unnecessary data in the output file
     [JsonIgnore]
     public override char Name
     {
@@ -71,10 +79,12 @@ public class Item : Entity
         set => _equipped = value;
     }
 
+    // Place holder property inherited from Entity, needed as status cannot be set
+    // as ignored in Entity because it needs to be accessed in Knight
     [JsonIgnore]
     public override string Status { get; set; }
 
-
+    // Constructors
     public Item() { }
 
     public Item(char name, int attMod, int defMod, int[] pos)
@@ -86,15 +96,19 @@ public class Item : Entity
     }
 }
 
+// Knight is a child of Entity so can be stored with Items in the Board
 public class Knight : Entity
 {
+    // Name doesn't change after constructor
     private readonly char _name;
+
     private int[] _position;
     private string _status = "LIVE";
     private Item _item = (Item)null;
     private int _attack = 1;
     private int _defence = 1;
 
+    // Accessors
     [JsonIgnore]
     public override char Name
     {
@@ -123,12 +137,15 @@ public class Knight : Entity
 
         set
         {
+            // if no item is held, set item to provided Item, otherwise ignore given Item
             if (_item == (Item)null) _item = value as Item;
         }
     }
 
+    // Only used in JSON as the Item method above also shows the Item's properties
     public string HeldItem
     {
+        // If no item is held, return null, otherwise return the char of the item
         get => _item == (Item)null ? (string)null : _item.Name.ToString();
     }
 
@@ -146,6 +163,7 @@ public class Knight : Entity
         set => _defence = value;
     }
 
+    // Constructors
     public Knight() { }
 
     public Knight(char name, int[] pos)
@@ -154,6 +172,7 @@ public class Knight : Entity
         _position = pos;
     }
 
+    // Internal methods
     internal void Drop()
     {
         _item.Equipped = false;
@@ -176,17 +195,21 @@ public class Knight : Entity
         _status = "DEAD";
     }
 
+    // Allows the position to be copied by value rather than passing a reference,
+    // used in Move() to check if the next position has an item, water or an enemy
     public int[] CopyPos()
     {
         return new int[] { _position[0], _position[1] };
     }
 }
 
+// Base class for Knights and Items
 public class Entity
 {
     private int[] _position = { -1, -1 };
     private char _name;
 
+    // Virtual methods are overwritten in children
     public virtual int[] Position
     {
         get => _position;
@@ -204,6 +227,7 @@ public class Entity
     public virtual string Status { get; set; }
 }
 
+// Main Program
 class Program
 {
     /**
@@ -213,6 +237,7 @@ class Program
     The final position of a DROWNED knight is null.
 
     **/
+    // Checks if the next move will move the knight into water
     static bool CheckMoveForWater(int[] Coord)
     {
         if ((Coord[0] < 0) || (Coord[0] > 7) || (Coord[1] < 0) || Coord[1] > 7) return true;
@@ -244,6 +269,7 @@ class Program
     A DEAD or DROWNED knight has attack 0 and defence 0.
 
         **/
+    // Calculates the fighting scores and tells which knight to die
     static void Fight(Knight Attacker, Knight Defender)
     {
         float attackerScore = ((float)(Attacker.Attack + 0.5 + ((Attacker.Item == (Item)null) ? 0 : Attacker.Item.AttackModifier)));
@@ -259,15 +285,18 @@ class Program
         return;
     }
 
+    // Checks if the next move will move the knight onto the same square as another knight
     static int CheckMoveForFight(int[] Coord, List<Entity> Board)
     {
         for (int i = 0; i < Board.Count; i++)
         {
             if (Board[i].Position.SequenceEqual(Coord) && (Board[i].GetType() == typeof(Knight)))
             {
+                // Only fight if the knight in the square is actually alive
                 if (Board[i].Status != "LIVE")
                 {
-                return i;
+                    // Returns the index of the knight in the board list of entities
+                    return i;
                 }
             }
         }
@@ -301,9 +330,12 @@ class Program
     Knights that drown throw their item to the bank before sinking down to Davy Jones' Locker - the item is left on the last valid tile that the knight was on.
 
     **/     
+    // Checks if the next move will move the knight onto the same square as an item
     static int CheckMoveForItem(int[] Coord, List<Entity> Board)
     {
+        // Used to pick up the best item on a square in the event that there are multiple
         char[] itemPriority = { 'A', 'M', 'D', 'H' };
+        // -1 if there is no item
         int item = -1;
 
         for (int i = 0; i < Board.Count; i++)
@@ -314,6 +346,7 @@ class Program
                 {
                     item = i;
                 }
+                // If there is a better item, use that one
                 else if(Array.IndexOf(itemPriority, Board[i].Name) < Array.IndexOf(itemPriority, Board[item].Name))
                 {
                     item = i;
@@ -321,6 +354,7 @@ class Program
             }
         }
 
+        // Returns the index of the item in the Board list of entities
         return item;
     }
 
@@ -339,9 +373,12 @@ class Program
         **/
     static void Move(Knight knight, char Direction, List<Entity> Board)
     {
-        int[] next = knight.CopyPos();
+        // Do not bother moving dead knights
         if (knight.Status != "LIVE") return;
+        // Copy the position of the knight currently
+        int[] next = knight.CopyPos();
 
+        // Update the position depending on the direction
         switch (Direction)
         {
             case 'N':
@@ -361,30 +398,40 @@ class Program
                 return;                      
         }
 
+        // Check if there is water
         bool water = CheckMoveForWater(next);
         if (water)
         {
+            // Knight drops their item on their current square before moving to the water
             if (knight.Item != (Item)null) knight.Drop();
             knight.Drown();
+            // Return as the knight cannot move or fight now
             return;
         }
 
+        // Check if there is an item
         int item = CheckMoveForItem(next, Board);
         if (item > -1)
         {
+            // Pickup the item that is there
             knight.Item = (Item)Board[item];
+            // Tell the item it is equipped
             knight.Item.Equipped = true;
 
         }
         
+        // Check if there is another knight on the next square
         int fight = CheckMoveForFight(next, Board);
         if (fight > -1)
         {
+            // Move the knight to the square before fighting
             knight.Position = next;
             Fight(knight, (Knight)Board[fight]);
         }
-
+        // Move the knight to the square, if there fought then they are already there
+        // but this will simply move them to the same square
         knight.Position = next;
+        // If an item is held, move the item with the knight
         if(knight.Item != (Item)null) knight.Item.Position = next;
         return;
     }
@@ -407,6 +454,7 @@ class Program
     ```
 
         **/
+    // Fill the board list with all the knights and items
     static List<Entity> PopulateBoard(List<Knight> Knights, List<Item> Items)
     {
         List<Entity> board = new List<Entity>();
@@ -421,11 +469,13 @@ class Program
             board.Add(Items[i]);
         }
 
+        // Return the filled board
         return board;
     }
 
     static void WriteOut(List<Entity> Board)
     {
+        // Create the JSON object
         var output = new Output
         {
             red = (Knight)Board[0],
@@ -439,6 +489,7 @@ class Program
             axe = (Item)Board[7],
         };
 
+        // Serialise and format then output
         var options = new JsonSerializerOptions { WriteIndented = true};
         string jsonString = JsonSerializer.Serialize(output, options);
         File.WriteAllText("final_state.json", jsonString);
@@ -446,10 +497,12 @@ class Program
 
     static void Main()
     {
+        // Create lists for entities and the board
         List<Entity> board = new List<Entity>();
         List<Knight> Knights = new List<Knight>();
         List<Item> Items = new List<Item>();
 
+        // Load in the knights and items and construct the data into Entities
         string line;
         System.IO.StreamReader knightsFile = new System.IO.StreamReader(@"knights.txt");
         while ((line = knightsFile.ReadLine()) != null)
@@ -465,24 +518,28 @@ class Program
                                new[] { (int)Char.GetNumericValue(line[3]), (int)Char.GetNumericValue(line[4]) }));
         }
         itemsFile.Close();
-        
+
+        // Open the moves file        
         System.IO.StreamReader movesFile = new System.IO.StreamReader(@"moves.txt");
 
+        // While there is another line available
         while((line = movesFile.ReadLine()) != null)
         {
             switch (line)
             {
+                // On game-start, populate the board
                 case "GAME-START":
                     board = PopulateBoard(Knights, Items);
-                    System.Console.WriteLine("Game Started");
                     break;
 
+                // On game end, output to a JSON file
                 case "GAME-END":
                     WriteOut(board);
-                    System.Console.WriteLine("Game Finished");
                     break;
 
+                // Regex match any of the knight names and any cardinal direction
                 case string _ when Regex.IsMatch(line, @"[RBGY]:[NESW]"):
+                    // Move the according knight in the given direction
                     foreach (Knight k in Knights)
                     {
                         if (k.Name == line[0])
@@ -492,13 +549,17 @@ class Program
                     }
                     break;
 
+                // Any other command is not recognised
                 default:
                     throw new UnrecognisedMovement(line);
             }
         }
 
-        Console.WriteLine("Press any key to close");
+        // Close mvoes file before closing console
         movesFile.Close();
-        //Console.ReadKey();
+
+        // Uncomment to hang console before closing
+        // Console.WriteLine("Press any key to close");
+        // Console.ReadKey();
     }
 }
