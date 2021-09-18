@@ -293,7 +293,7 @@ class Program
             if (Board[i].Position.SequenceEqual(Coord) && (Board[i].GetType() == typeof(Knight)))
             {
                 // Only fight if the knight in the square is actually alive
-                if (Board[i].Status != "LIVE")
+                if (Board[i].Status == "LIVE")
                 {
                     // Returns the index of the knight in the board list of entities
                     return i;
