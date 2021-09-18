@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Text.Json;
@@ -8,13 +9,11 @@ using System.Text.Json.Serialization;
 public class UnrecognisedMovement : Exception
 {
     public UnrecognisedMovement()
-    {
-    }
+    { }
 
     public UnrecognisedMovement(string message)
         : base("The given command: " + message +" does not fit the expected format -> (Knight char):(Cardinal direction) e.g. R:S")
-    { 
-    }
+    { }
 }
 
 public class Output
@@ -34,28 +33,31 @@ public class Output
 
 public class Item : Entity
 {
-    private readonly char _name;
+    private readonly char _name = '\0';
     private readonly int _attackModifier;
     private readonly int _defenceModifier;
     private int[] _position;
     private bool _equipped = false;
 
-    public new char Name
+    [JsonIgnore]
+    public override char Name
     {
         get => _name;
     }
 
+    [JsonIgnore]
     public int AttackModifier
     {
         get => _attackModifier;
     }
 
+    [JsonIgnore]
     public int DefenceModifier
     {
         get => _defenceModifier;
     }
 
-    public new int[] Position
+    public override int[] Position
     {
         get => _position;
 
@@ -68,6 +70,10 @@ public class Item : Entity
 
         set => _equipped = value;
     }
+
+    [JsonIgnore]
+    public override string Status { get; set; }
+
 
     public Item() { }
 
@@ -89,20 +95,20 @@ public class Knight : Entity
     private int _attack = 1;
     private int _defence = 1;
 
-    public new char Name
+    [JsonIgnore]
+    public override char Name
     {
         get => _name;
-
     }
 
-    public new int[] Position
+    public override int[] Position
     {
         get => _position;
 
         set => _position = value;
     }
 
-    public new string Status
+    public override string Status
     {
         get => _status;
 
@@ -110,6 +116,7 @@ public class Knight : Entity
 
     }
 
+    [JsonIgnore]
     public Item Item
     {
         get => _item;
@@ -118,6 +125,11 @@ public class Knight : Entity
         {
             if (_item == (Item)null) _item = value as Item;
         }
+    }
+
+    public string HeldItem
+    {
+        get => _item == (Item)null ? (string)null : _item.Name.ToString();
     }
 
     public int Attack
@@ -144,6 +156,7 @@ public class Knight : Entity
 
     internal void Drop()
     {
+        _item.Equipped = false;
         _item = (Item)null;
     }
 
@@ -162,22 +175,33 @@ public class Knight : Entity
         _defence = 0;
         _status = "DEAD";
     }
+
+    public int[] CopyPos()
+    {
+        return new int[] { _position[0], _position[1] };
+    }
 }
 
 public class Entity
 {
-    private readonly int[] _position = { -1, -1 };
+    private int[] _position = { -1, -1 };
+    private char _name;
 
-    public int[] Position
+    public virtual int[] Position
     {
         get => _position;
+
+        set => _position = value;
     }
-    public Array Name 
-    { 
-        get; 
-        internal set; 
+
+    public virtual char Name
+    {
+        get => _name;
+
+        set => _name = value;
     }
-    public string Status { get; internal set; }
+
+    public virtual string Status { get; set; }
 }
 
 class Program
@@ -239,7 +263,7 @@ class Program
     {
         for (int i = 0; i < Board.Count; i++)
         {
-            if ((Board[i].Position == Coord) && (Board[i].GetType() == typeof(Knight)))
+            if (Board[i].Position.SequenceEqual(Coord) && (Board[i].GetType() == typeof(Knight)))
             {
                 if (Board[i].Status != "LIVE")
                 {
@@ -284,9 +308,9 @@ class Program
 
         for (int i = 0; i < Board.Count; i++)
         {
-            if (Board[i].Position == Coord && (Board[i].GetType() == typeof(Item)))
+            if (Board[i].Position.SequenceEqual(Coord) && (Board[i].GetType() == typeof(Item)))
             {
-                if(item == -1)
+                if (item == -1)
                 {
                     item = i;
                 }
@@ -315,7 +339,7 @@ class Program
         **/
     static void Move(Knight knight, char Direction, List<Entity> Board)
     {
-        int[] next = knight.Position;
+        int[] next = knight.CopyPos();
         if (knight.Status != "LIVE") return;
 
         switch (Direction)
@@ -340,7 +364,7 @@ class Program
         bool water = CheckMoveForWater(next);
         if (water)
         {
-            knight.Drop();
+            if (knight.Item != (Item)null) knight.Drop();
             knight.Drown();
             return;
         }
@@ -415,12 +439,12 @@ class Program
             axe = (Item)Board[7],
         };
 
-        var options = new JsonSerializerOptions { WriteIndented = true, IgnoreReadOnlyProperties = true, };
+        var options = new JsonSerializerOptions { WriteIndented = true};
         string jsonString = JsonSerializer.Serialize(output, options);
         File.WriteAllText("final_state.json", jsonString);
     }
 
-    static void Main(string[] args)
+    static void Main()
     {
         List<Entity> board = new List<Entity>();
         List<Knight> Knights = new List<Knight>();
@@ -437,7 +461,8 @@ class Program
         System.IO.StreamReader itemsFile = new System.IO.StreamReader(@"items.txt");
         while ((line = itemsFile.ReadLine()) != null)
         {
-            Items.Add(new Item(line[0], line[1], line[2], new[] { (int)Char.GetNumericValue(line[3]), (int)Char.GetNumericValue(line[4]) } ));
+            Items.Add(new Item(line[0], (int)Char.GetNumericValue(line[1]), (int)Char.GetNumericValue(line[2]),
+                               new[] { (int)Char.GetNumericValue(line[3]), (int)Char.GetNumericValue(line[4]) }));
         }
         itemsFile.Close();
         
